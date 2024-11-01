@@ -16,6 +16,7 @@ private:
     std::mutex socketMutex{};
     std::string fragment_store{};
     std::unique_ptr<LocalServer> localServerPtr{};
+    bool started = false;
 public:
     void listenForMessages(std::unique_ptr<RchanSocket>& sock) {
         static std::string buffer;
@@ -68,12 +69,24 @@ public:
         }
     }
 
+    void connectWithRetry() {
+        RsockPtr->connect(Address(RchanServerIP, 8080));
+        started = true;
+    }
+
     RchanClient() {
-        RchanServerIP = "10.81.92.228";
+        RchanServerIP = "10.81.60.49";
         {
             std::lock_guard<std::mutex> lock(socketMutex);
-            RsockPtr = std::make_unique<RchanSocket>();
-            RsockPtr->connect(Address(RchanServerIP, 8080));
+            int tries = 1;
+            while(!started) {
+                std::cout << "Connecting to Server... Attempt " << tries++ << std::endl;
+                RsockPtr = std::make_unique<RchanSocket>();
+                started = false;
+                std::thread([this]() { connectWithRetry(); }).detach();
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                tries++;
+            }
         }
         std::cout << "Connected to Server" << std::endl;
         RchanClientPtr = std::make_unique<std::thread>([this]() { listenForMessages(std::ref(RsockPtr)); });
@@ -82,6 +95,7 @@ public:
 
     ~RchanClient() {
         running = false;
+        started = false;
         if (RchanClientPtr && RchanClientPtr->joinable()) {
             RchanClientPtr->join();
         }
@@ -97,6 +111,7 @@ public:
 
         // First stop the thread
         running = false;
+        started = false;
 
         // Wait for thread to finish
         if (RchanClientPtr && RchanClientPtr->joinable()) {
@@ -113,7 +128,15 @@ public:
             {
                 std::lock_guard<std::mutex> lock(socketMutex);
                 RsockPtr = std::make_unique<RchanSocket>();
-                RsockPtr->connect(Address(servers[server_name], 8080));
+                int tries = 1;
+                while(!started) {
+                    std::cout << "Connecting to Server... Attempt " << tries++ << std::endl;
+                    RsockPtr = std::make_unique<RchanSocket>();
+                    started = false;
+                    std::thread([this]() { connectWithRetry(); }).detach();
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    tries++;
+                }
             }
 
             running = true;
@@ -127,6 +150,7 @@ public:
         catch (const std::exception& e) {
             std::cout << "Error connecting to server: " << e.what() << std::endl;
             running = false;
+            started = false;
         }
     }
 

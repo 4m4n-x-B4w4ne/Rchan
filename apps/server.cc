@@ -62,7 +62,7 @@ private:
 
 public:
     RchanServer() {
-        servers["Rchan"] = "10.81.92.228";
+        servers["Rchan"] = "10.81.60.49";
 
         if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
             perror("socket failed");
